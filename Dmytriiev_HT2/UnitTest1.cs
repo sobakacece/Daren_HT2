@@ -5,65 +5,144 @@ using NUnit.Framework;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Assert = NUnit.Framework.Assert;
 using OpenQA.Selenium.Support.UI;
+using SeleniumExtras.WaitHelpers;
+using PageFactoryCore;
+using SeleniumExtras.PageObjects;
+using OpenQA.Selenium.Internal;
 
 namespace Dmytriiev_HT2
 {
     public class Tests
     {
         ChromeDriver chromeDriver = new ChromeDriver();
-
         [SetUp]
         public void Setup()
         {
-            chromeDriver.Navigate().GoToUrl("https://avic.ua/ua");
+            //chromeDriver.Navigate().GoToUrl("https://avic.ua/ua");
         }
 
         [Test]
         public void Test1() //If header exists
         {
-            IWebElement header = chromeDriver.FindElement(By.ClassName("header"));
-            if (header != null )
+            Header header = new Header(chromeDriver);
+            header.GoTo();
+            try
+            {
+                header.WaitAndFindElement(By.ClassName("header"));
+            }
+            catch (NoSuchElementException)
+            {
+                Assert.Fail();
+            }
+            finally
             {
                 Assert.Pass();
             }
+            header.CloseBrowser();
+           
         }
         [Test]
         public void Test2() //Is link navigates to right page
         {
-            chromeDriver.Manage().Timeouts().ImplicitWait = new TimeSpan(0, 0, 10);
-            string result = chromeDriver.FindElement(By.XPath("//a[contains(text(), 'Оплата і доставка')]")).GetAttribute("href");
-            Assert.That(result, Is.EqualTo("https://avic.ua/ua/pokupka-i-dostavka-tovarov"));
+            DeliveryLink linkPage = new DeliveryLink(chromeDriver);
+            linkPage.GoTo();
+            Assert.That(linkPage.Expected, Is.EqualTo(linkPage.GetLink()));
+            linkPage.CloseBrowser();
         }
         [Test]
         public void Test3() //Check if logo changes in mobile mode
         {
-            IWebElement desktopLogo, mobileLogo;
-            bool result1, result2;
+            MobileSize browser = new MobileSize(chromeDriver);
+            browser.GoTo();
 
-            bool Check (bool nonDisplayableVersion, bool displayableVersion)
-            {
-                if (nonDisplayableVersion == false && displayableVersion == true)
-                {
-                    return true;
-                }
-                return false;
-            }
-         
-            chromeDriver.Manage().Window.Size = new System.Drawing.Size(1920, 1080);
-            desktopLogo = chromeDriver.FindElement(By.XPath("//div[@class = 'header-bottom__logo']"));
-            mobileLogo = chromeDriver.FindElement(By.XPath("//div[@class = 'mobile-icon']"));
+            browser.ChangeWindowSize(1920, 1080);
+            browser.DesktopLogoCheck();
 
-            result1 = Check(mobileLogo.Displayed, desktopLogo.Displayed);
+            browser.ChangeWindowSize(1200, 1080);
+            browser.MobileLogoCheck();
 
-            chromeDriver.Manage().Window.Size = new System.Drawing.Size(1100, 1080);
-
-            result2 = Check(desktopLogo.Displayed, mobileLogo.Displayed);
-            Assert.IsTrue(result1 && result2);
+            Assert.IsTrue(browser.MyMobileResult && browser.MyDesktopResult);
+            browser.CloseBrowser();
         }
         [TestCleanup]
+        //public void CloseBrowser()
+        //{
+        //    chromeDriver.Quit();
+        //}
+    }
+    public abstract class WebPage
+    {
+        protected IWebDriver MyDriver { get; }
+        protected WebDriverWait WebDriverWait { get; }
+        public abstract string MyUrl { get;  }
+
+        private const int timeout = 30;
+        
+        public WebPage(ChromeDriver browser)
+        {
+            this.MyDriver = browser;
+            WebDriverWait = new WebDriverWait(browser, TimeSpan.FromSeconds(timeout));
+        }
+        public void GoTo()
+        {
+            MyDriver.Navigate().GoToUrl(MyUrl);            
+        }
+        public virtual IWebElement WaitAndFindElement(By locator)
+        {
+          return  WebDriverWait.Until(chromeDriver => chromeDriver.FindElement(locator));
+        }
         public void CloseBrowser()
         {
-            chromeDriver.Quit();
+            MyDriver.Quit();
         }
+
     }
+    public class Header : WebPage
+    {
+        public Header(ChromeDriver browser) : base(browser)
+        {
+            
+        }
+        public override string MyUrl
+        {
+            get
+            {
+                return "https://avic.ua/ua";
+            }
+        }
+        
+
+    }
+    public class DeliveryLink : WebPage
+    {
+        public DeliveryLink(ChromeDriver browser) : base(browser)
+        {
+
+        }
+        public string Expected
+        {
+            get
+            {
+                return "https://avic.ua/ua/pokupka-i-dostavka-tovarov";
+            }
+        }
+
+        public override string MyUrl
+        {
+            get
+            {
+                return "https://avic.ua/ua";
+            }
+        }
+        public string GetLink()
+        {
+            return WaitAndFindElement(By.XPath("//a[contains(text(), 'Оплата і доставка')]")).GetAttribute("href");
+        }
+
+
+    }
+
+
+
+
 }
